@@ -198,12 +198,19 @@ function dispatchSseEvent(
   if (kind === 'status-update') {
     const status = event['status'] as Record<string, unknown> | undefined;
     const state = status?.['state'] as string | undefined;
-    const isFinal = event['final'] === true;
     if (state === 'working') {
-      cb.onWorking();
-    } else if (isFinal || state === 'completed' || state === 'failed' || state === 'canceled') {
-      // onDone will be called once at stream end with the contextId
+      // Check for message parts embedded in the status-update.
+      // The gateway sends content as:
+      //   { kind:'status-update', status: { state:'working', message: { parts: [...] } } }
+      const message = status?.['message'] as Record<string, unknown> | undefined;
+      const parts = message?.['parts'] as Part[] | undefined;
+      if (parts?.length) {
+        cb.onPart(parts);
+      } else {
+        cb.onWorking();
+      }
     }
+    // completed/failed/canceled: onDone is called at stream end
     return;
   }
 
